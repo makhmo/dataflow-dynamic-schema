@@ -29,7 +29,6 @@ import org.apache.beam.sdk.io.gcp.bigquery.InsertRetryPolicy;
 import org.apache.beam.sdk.io.gcp.bigquery.WriteResult;
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO;
 import org.apache.beam.sdk.options.Description;
-import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.options.Validation.Required;
 import org.apache.beam.sdk.options.ValueProvider;
@@ -47,7 +46,7 @@ import org.joda.time.Duration;
 public class DynamicSchemaPipeline {
 
   /** TODO: Document. */
-  public interface Options extends PipelineOptions {
+  public interface PipelineOptions extends BigQueryPipelineOptions {
 
     @Description("The Pub/Sub subscription to read messages from")
     @Required
@@ -55,11 +54,6 @@ public class DynamicSchemaPipeline {
 
     void setSubscription(ValueProvider<String> value);
 
-    @Description("The BigQuery table to write messages to")
-    @Required
-    ValueProvider<String> getTable();
-
-    void setTable(ValueProvider<String> value);
   }
 
   /**
@@ -68,7 +62,7 @@ public class DynamicSchemaPipeline {
    * @param args
    */
   public static void main(String[] args) {
-    Options options = PipelineOptionsFactory.fromArgs(args).as(Options.class);
+    PipelineOptions options = PipelineOptionsFactory.fromArgs(args).as(PipelineOptions.class);
 
     run(options);
   }
@@ -81,7 +75,7 @@ public class DynamicSchemaPipeline {
    * @param options
    * @return
    */
-  public static PipelineResult run(Options options) {
+  public static PipelineResult run(PipelineOptions options) {
 
     // Create the pipeline
     Pipeline pipeline = Pipeline.create(options);

@@ -1,23 +1,24 @@
 /*
  * Copyright (C) 2018 Google Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package com.google.cloud.pso.bigquery;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.api.services.bigquery.model.TableReference;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.cloud.bigquery.BigQuery;
 import com.google.cloud.bigquery.BigQueryOptions;
@@ -29,6 +30,7 @@ import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.Table;
 import com.google.cloud.bigquery.TableDefinition;
 import com.google.cloud.bigquery.TableId;
+import com.google.cloud.pso.pipeline.BigQueryPipelineOptions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import java.io.IOException;
@@ -59,9 +61,11 @@ public class TableRowSchemaMutator extends DoFn<Iterable<TableRowWithSchema>, Ta
   @ProcessElement
   public void processElement(ProcessContext context) {
     Iterable<TableRowWithSchema> mutatedRows = context.element();
+    BigQueryPipelineOptions options = (BigQueryPipelineOptions)context.getPipelineOptions();
+    TableReference tableRef = toTableReference(options.getTable());
 
     // Retrieve the table schema
-    TableId tableId = TableId.of("data-analytics-pocs", "demo", "dynamic_schema");
+    TableId tableId = TableId.of(tableRef.getProjectId(), tableRef.getDatasetId(), tableRef.getTableId());
     Table table = bigQuery.getTable(tableId);
 
     checkNotNull(table, "Failed to find table to mutate: " + tableId.toString());
@@ -84,6 +88,18 @@ public class TableRowSchemaMutator extends DoFn<Iterable<TableRowWithSchema>, Ta
 
     // Pass all rows downstream now that the schema of the output table has been mutated.
     mutatedRows.forEach(context::output);
+  }
+
+  public static TableReference toTableReference(String value) {
+      TableReference ret = new TableReference();
+      String[] splitValues = value.split(":");
+      if(splitValues.length > 2) {
+          ret.setProjectId(splitValues[0]);
+          ret.setDatasetId(splitValues[1]);
+          ret.setTableId(splitValues[2]);
+      }
+
+      return ret;
   }
 
   /**
