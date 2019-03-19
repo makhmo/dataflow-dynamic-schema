@@ -16,29 +16,24 @@
 
 package com.google.cloud.pso.bigquery;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.api.services.bigquery.model.TableReference;
 import com.google.auth.oauth2.GoogleCredentials;
-import com.google.cloud.bigquery.BigQuery;
-import com.google.cloud.bigquery.BigQueryOptions;
-import com.google.cloud.bigquery.Field;
+import com.google.cloud.bigquery.*;
 import com.google.cloud.bigquery.Field.Mode;
-import com.google.cloud.bigquery.FieldList;
-import com.google.cloud.bigquery.LegacySQLTypeName;
-import com.google.cloud.bigquery.Schema;
-import com.google.cloud.bigquery.Table;
-import com.google.cloud.bigquery.TableDefinition;
-import com.google.cloud.bigquery.TableId;
-import com.google.cloud.pso.pipeline.BigQueryPipelineOptions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import org.apache.beam.sdk.options.PipelineOptions;
+import org.apache.beam.sdk.transforms.DoFn;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
-import org.apache.beam.sdk.transforms.DoFn;
 
-/** The {@link TableRowWithSchema} mutator. */
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * The {@link TableRowWithSchema} mutator.
+ */
 public class TableRowSchemaMutator extends DoFn<Iterable<TableRowWithSchema>, TableRowWithSchema> {
 
   private transient BigQuery bigQuery;
@@ -49,6 +44,7 @@ public class TableRowSchemaMutator extends DoFn<Iterable<TableRowWithSchema>, Ta
 
   @Setup
   public void setup() throws IOException {
+
     if (bigQuery == null) {
       bigQuery =
           BigQueryOptions.newBuilder()
@@ -59,53 +55,63 @@ public class TableRowSchemaMutator extends DoFn<Iterable<TableRowWithSchema>, Ta
   }
 
   @ProcessElement
-  public void processElement(ProcessContext context) {
+  public void processElement(ProcessContext context, PipelineOptions options) throws IOException {
     Iterable<TableRowWithSchema> mutatedRows = context.element();
-    BigQueryPipelineOptions options = (BigQueryPipelineOptions)context.getPipelineOptions();
-    TableReference tableRef = toTableReference(options.getTable());
 
-    // Retrieve the table schema
-    TableId tableId = TableId.of(tableRef.getProjectId(), tableRef.getDatasetId(), tableRef.getTableId());
-    Table table = bigQuery.getTable(tableId);
+    mutatedRows.forEach(rowWithSchema -> {
+      // Retrieve the table schema
+      TableReference tr = toTableReference(rowWithSchema.getTableName());
+      TableId tableId = TableId.of(tr.getDatasetId(), tr.getTableId());
+      Table table = bigQuery.getTable(tableId);
 
-    checkNotNull(table, "Failed to find table to mutate: " + tableId.toString());
+      checkNotNull(table, "Failed to find table to mutate: " + tableId.toString());
 
-    TableDefinition tableDef = table.getDefinition();
-    Schema schema = tableDef.getSchema();
+      TableDefinition tableDef = table.getDefinition();
+      Schema schema = tableDef.getSchema();
 
-    checkNotNull(table, "Unable to retrieve schema for table: " + tableId.toString());
+      checkNotNull(table, "Unable to retrieve schema for table: " + tableId.toString());
 
-    // Compare the records to the known table schema
-    Set<Field> additionalFields = getAdditionalFields(schema, mutatedRows);
+      // Compare the records to the known table schema
+      Set<Field> additionalFields = getAdditionalFields(schema, mutatedRows);
 
-    // Update the table schema for the new fields
-    schema = addFieldsToSchema(schema, additionalFields);
-    table
-        .toBuilder()
-        .setDefinition(tableDef.toBuilder().setSchema(schema).build())
-        .build()
-        .update();
+      // Update the table schema for the new fields
+      schema = addFieldsToSchema(schema, additionalFields);
+      table
+          .toBuilder()
+          .setDefinition(tableDef.toBuilder().setSchema(schema).build())
+          .build()
+          .update();
+
+    });
 
     // Pass all rows downstream now that the schema of the output table has been mutated.
     mutatedRows.forEach(context::output);
   }
 
   public static TableReference toTableReference(String value) {
-      TableReference ret = new TableReference();
-      String[] splitValues = value.split(":");
-      if(splitValues.length > 2) {
-          ret.setProjectId(splitValues[0]);
-          ret.setDatasetId(splitValues[1]);
-          ret.setTableId(splitValues[2]);
-      }
+    TableReference ret = new TableReference();
 
-      return ret;
+    checkNotNull(value, "Unable to retrieve table reference.Value must be provided as --table option of the pipeline. <NULL>");
+
+    String[] splitValues = value.split("\\.");
+    if (splitValues.length > 2) {
+      ret.setProjectId(splitValues[0]);
+      ret.setDatasetId(splitValues[1]);
+      ret.setTableId(splitValues[2]);
+    } else if (splitValues.length > 1) {
+      ret.setDatasetId(splitValues[0]);
+      ret.setTableId(splitValues[1]);
+    } else {
+      ret.setTableId(value);
+    }
+
+    return ret;
   }
 
   /**
    * Retrieves the fields which have been added to the schema across all of the mutated rows.
    *
-   * @param schema The schema to validate against.
+   * @param schema      The schema to validate against.
    * @param mutatedRows The records which have mutated.
    * @return A unique set of fields which have been added to the schema.
    */
@@ -152,7 +158,7 @@ public class TableRowSchemaMutator extends DoFn<Iterable<TableRowWithSchema>, Ta
    * Adds additional fields to an existing schema and returns a new schema containing all existing
    * and additional fields.
    *
-   * @param schema The pre-existing schema to add fields to.
+   * @param schema           The pre-existing schema to add fields to.
    * @param additionalFields The new fields to be added to the schema.
    * @return A new schema containing the existing and new fields added to the schema.
    */

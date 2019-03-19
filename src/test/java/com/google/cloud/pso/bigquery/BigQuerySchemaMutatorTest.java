@@ -16,21 +16,11 @@
 
 package com.google.cloud.pso.bigquery;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
-import com.google.cloud.bigquery.BigQuery;
-import com.google.cloud.bigquery.Field;
-import com.google.cloud.bigquery.LegacySQLTypeName;
-import com.google.cloud.bigquery.Schema;
-import com.google.cloud.bigquery.Table;
-import com.google.cloud.bigquery.TableDefinition;
+import com.google.cloud.bigquery.*;
 import com.google.common.collect.Lists;
-import java.util.Map;
 import org.apache.beam.sdk.testing.PAssert;
 import org.apache.beam.sdk.testing.TestPipeline;
 import org.apache.beam.sdk.transforms.Create;
@@ -43,13 +33,24 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Test cases for the {@link BigQuerySchemaMutator} class. */
+import java.util.Map;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+/**
+ * Test cases for the {@link BigQuerySchemaMutator} class.
+ */
 @RunWith(JUnit4.class)
 public class BigQuerySchemaMutatorTest {
 
-  @Rule public final transient TestPipeline pipeline = TestPipeline.create();
+  @Rule
+  public final transient TestPipeline pipeline = TestPipeline.create();
 
-  /** Tests the {@link BigQuerySchemaMutator} with failed inserts. */
+  /**
+   * Tests the {@link BigQuerySchemaMutator} with failed inserts.
+   */
   @Test
   public void testMutateSchema() {
     // Arrange
@@ -78,7 +79,7 @@ public class BigQuerySchemaMutatorTest {
 
     TableRowWithSchema tableRowWithSchema =
         TableRowWithSchema.newBuilder()
-            .setTableName("test_table")
+            .setTableName("test_dataset.test_table")
             .setTableRow(tableRow)
             .setTableSchema(tableSchema)
             .build();
@@ -99,6 +100,7 @@ public class BigQuerySchemaMutatorTest {
                 "MutateSchema",
                 BigQuerySchemaMutator.mutateWithSchema(incomingRecordsView)
                     .withBigQueryService(bigQuery));
+
 
     // Assert
     //
